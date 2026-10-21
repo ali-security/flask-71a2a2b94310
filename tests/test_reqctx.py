@@ -4,6 +4,7 @@ import pytest
 
 import flask
 from flask.globals import request_ctx
+from flask.sessions import SecureCookieSession
 from flask.sessions import SecureCookieSessionInterface
 from flask.sessions import SessionInterface
 
@@ -275,6 +276,17 @@ def test_session_dynamic_cookie_name():
     # cookies are being used for the urls that end with "dynamic cookie"
     assert test_client.get("/get").data == b"42"
     assert test_client.get("/get_dynamic_cookie").data == b"616"
+
+
+def test_session_assignment_on_context(app):
+    session = SecureCookieSession({"value": "42"})
+
+    with app.test_request_context():
+        request_ctx.session = session
+        assert request_ctx._session is session
+        assert not session.accessed
+        assert flask.session.get("value") == "42"
+        assert session.accessed
 
 
 def test_bad_environ_raises_bad_request():

@@ -2001,8 +2001,8 @@ class Flask(Scaffold):
                 for func in reversed(self.after_request_funcs[name]):
                     response = self.ensure_sync(func)(response)
 
-        if not self.session_interface.is_null_session(ctx.session):
-            self.session_interface.save_session(self, ctx.session, response)
+        if not self.session_interface.is_null_session(ctx._session):
+            self.session_interface.save_session(self, ctx._session, response)
 
         return response
 

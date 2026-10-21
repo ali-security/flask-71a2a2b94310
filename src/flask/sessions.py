@@ -39,10 +39,15 @@ class SessionMixin(MutableMapping):
     #: ``True``.
     modified = True
 
-    #: Some implementations can detect when session data is read or
-    #: written and set this when that happens. The mixin default is hard
-    #: coded to ``True``.
-    accessed = True
+    accessed = False
+    """Indicates if the session was accessed, even if it was not modified. This
+    is set when the session object is accessed through the request context,
+    including the global :data:`.session` proxy. A ``Vary: cookie`` header will
+    be added if this is ``True``.
+
+    .. versionchanged:: 3.1.3
+        This is tracked by the request context.
+    """
 
 
 class SecureCookieSession(CallbackDict, SessionMixin):
@@ -61,30 +66,11 @@ class SecureCookieSession(CallbackDict, SessionMixin):
     #: will only be written to the response if this is ``True``.
     modified = False
 
-    #: When data is read or written, this is set to ``True``. Used by
-    # :class:`.SecureCookieSessionInterface` to add a ``Vary: Cookie``
-    #: header, which allows caching proxies to cache different pages for
-    #: different users.
-    accessed = False
-
     def __init__(self, initial: t.Any = None) -> None:
         def on_update(self) -> None:
             self.modified = True
-            self.accessed = True
 
         super().__init__(initial, on_update)
-
-    def __getitem__(self, key: str) -> t.Any:
-        self.accessed = True
-        return super().__getitem__(key)
-
-    def get(self, key: str, default: t.Any = None) -> t.Any:
-        self.accessed = True
-        return super().get(key, default)
-
-    def setdefault(self, key: str, default: t.Any = None) -> t.Any:
-        self.accessed = True
-        return super().setdefault(key, default)
 
 
 class NullSession(SecureCookieSession):
