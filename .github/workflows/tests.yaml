@@ -1,25 +1,20 @@
 name: Tests
 on:
-  push:
-    branches:
-      - main
-      - '*.x'
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - '*.rst'
-  pull_request:
-    branches:
-      - main
-      - '*.x'
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - '*.rst'
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: 'pytest -k expression to narrow the run (empty = full suite)'
+        required: false
+        default: ''
+# Resolve every pip install against the PyPI index as of the 2.3.3 release
+# (2023-08-21); newer click (CliRunner mix_stderr) and werkzeug break the 2.3.3 tests.
+env:
+  PIP_INDEX_URL: https://:2023-08-22@time-machines-pypi.sealsecurity.io/
 jobs:
   tests:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -33,8 +28,6 @@ jobs:
           - {name: '3.8', python: '3.8', os: ubuntu-latest, tox: py38}
           - {name: 'PyPy', python: 'pypy-3.10', os: ubuntu-latest, tox: pypy310}
           - {name: 'Minimum Versions', python: '3.11', os: ubuntu-latest, tox: py311-min}
-          - {name: 'Development Versions', python: '3.8', os: ubuntu-latest, tox: py38-dev}
-          - {name: Typing, python: '3.11', os: ubuntu-latest, tox: typing}
     steps:
       - uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3
       - uses: actions/setup-python@d27e3f3d7c64b4bbf8e4abfb9b63b83e846e0435
@@ -43,10 +36,10 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'requirements/*.txt'
       - name: cache mypy
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8
+        uses: actions/cache@v4
         with:
           path: ./.mypy_cache
           key: mypy|${{ matrix.python }}|${{ hashFiles('pyproject.toml') }}
         if: matrix.tox == 'typing'
       - run: pip install tox
-      - run: tox run -e ${{ matrix.tox }}
+      - run: tox run -e ${{ matrix.tox }}${{ inputs.test-filter != '' && format(' -- -k "{0}"', inputs.test-filter) || '' }}

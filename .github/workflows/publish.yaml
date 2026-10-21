@@ -1,32 +1,45 @@
 name: Publish
 on:
-  push:
-    tags:
-      - '*'
+  workflow_dispatch:
+# Resolve every pip install against the PyPI index as of the 2.3.3 release
+# (2023-08-21) so the build tooling matches what existed at release time.
+env:
+  PIP_INDEX_URL: https://:2023-08-22@time-machines-pypi.sealsecurity.io/
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       hash: ${{ steps.hash.outputs.hash }}
     steps:
       - uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3
       - uses: actions/setup-python@d27e3f3d7c64b4bbf8e4abfb9b63b83e846e0435
         with:
-          python-version: '3.x'
+          # 3.x now resolves to 3.14, where flit_core 3.9.0 crashes (ast.Str removed).
+          python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: 'requirements/*.txt'
       - run: pip install -r requirements/build.txt
+      # Pin the build backend to the version that built the public 2.3.3 wheel
+      # (WHEEL Generator: flit 3.9.0); build-system.requires only pins flit_core<4.
+      - run: |
+          echo "flit_core==3.9.0" > "${RUNNER_TEMP}/build-constraints.txt"
+          echo "PIP_CONSTRAINT=${RUNNER_TEMP}/build-constraints.txt" >> $GITHUB_ENV
       # Use the commit date instead of the current date during the build.
-      - run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> $GITHUB_ENV
+      # Hardcoded to the 2.3.3 tag commit date: on the fork, extra commits change git log.
+      - run: echo "SOURCE_DATE_EPOCH=1692638735" >> $GITHUB_ENV
       - run: python -m build
       # Generate hashes used for provenance.
       - name: generate hash
         id: hash
         run: cd dist && echo "hash=$(sha256sum * | base64 -w0)" >> $GITHUB_OUTPUT
-      - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
+      - uses: actions/upload-artifact@v4
         with:
+          name: dist
           path: ./dist
+          if-no-files-found: error
   provenance:
+    if: false
     needs: ['build']
     permissions:
       actions: read
@@ -39,8 +52,10 @@ jobs:
   create-release:
     # Upload the sdist, wheels, and provenance to a GitHub release. They remain
     # available as build artifacts for a while as well.
+    if: false
     needs: ['provenance']
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -56,8 +71,10 @@ jobs:
     needs: ['provenance']
     # Wait for approval before attempting to upload to PyPI. This allows reviewing the
     # files in the draft release.
+    if: false
     environment: 'publish'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       id-token: write
     steps:
